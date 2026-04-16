@@ -10,16 +10,9 @@ import wandb
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 def setup_wandb(args):
-    # Implement this if you wish to use wandb in your experiments
     pass
 
 def initialize_model(args):
-    '''
-    Helper function to initialize the model. You should be either finetuning
-    the pretrained model associated with the 'google-t5/t5-small' checkpoint
-    or training a T5 model initialized with the 'google-t5/t5-small' config
-    from scratch.
-    '''
     if args.finetune:
         model = T5ForConditionalGeneration.from_pretrained('google-t5/t5-small')
     else:
@@ -37,14 +30,12 @@ def mkdir(dirpath):
             pass
 
 def save_model(checkpoint_dir, model, best):
-    # Save model checkpoint to be able to load the model later
     mkdir(checkpoint_dir)
     filename = 'best_model.pt' if best else 'last_model.pt'
     path = os.path.join(checkpoint_dir, filename)
     torch.save(model.state_dict(), path)
 
 def load_model_from_checkpoint(args, best):
-    # Load model from a checkpoint
     model_type = 'ft' if args.finetune else 'scr'
     checkpoint_dir = os.path.join('checkpoints', f'{model_type}_experiments', args.experiment_name)
     filename = 'best_model.pt' if best else 'last_model.pt'
@@ -108,7 +99,6 @@ def get_parameter_names(model, forbidden_layer_types):
             for n in get_parameter_names(child, forbidden_layer_types)
             if not isinstance(child, tuple(forbidden_layer_types))
         ]
-    # Add model specific parameters (defined with nn.Parameter) since they are not in any child.
     result += list(model._parameters.keys())
     return result
 

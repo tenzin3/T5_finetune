@@ -16,16 +16,6 @@ PAD_IDX = 0
 class T5Dataset(Dataset):
 
     def __init__(self, data_folder, split):
-        '''
-        Skeleton for the class for performing data processing for the T5 model.
-
-        Some tips for implementation:
-            * You should be using the 'google-t5/t5-small' tokenizer checkpoint to tokenize both
-              the encoder and decoder output. 
-            * You want to provide the decoder some beginning of sentence token. Any extra-id on the
-              T5Tokenizer should serve that purpose.
-            * Class behavior should be different on the test set.
-        '''
         self.split = split
         self.tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
         self.process_data(data_folder, split, self.tokenizer)
@@ -35,7 +25,6 @@ class T5Dataset(Dataset):
         self.nl_queries = load_lines(nl_path)
         self.nl_queries = [f"Translate the following question to SQL: {q}" for q in self.nl_queries]
         
-        # Tokenize natural language inputs. We don't pad here, we pad in collate_fn.
         self.input_ids = tokenizer(self.nl_queries, padding=False, truncation=True)["input_ids"]
                 
         if split != "test":
@@ -55,21 +44,6 @@ class T5Dataset(Dataset):
             return self.input_ids[idx]
 
 def normal_collate_fn(batch):
-    '''
-    Collation function to perform dynamic padding for training and evaluation with the
-    development or validation set.
-
-    Inputs:
-        * batch (List[Any]): batch is a list of length batch_size, where each index contains what
-                             the dataset __getitem__ function returns.
-
-    Returns: To be compatible with the provided training loop, you should be returning
-        * encoder_ids: The input ids of shape BxT to be fed into the T5 encoder.
-        * encoder_mask: Mask of shape BxT associated with padding tokens in the encoder input
-        * decoder_inputs: Decoder input ids of shape BxT' to be fed into T5 decoder.
-        * decoder_targets: The target tokens with which to train the decoder (the tokens following each decoder input)
-        * initial_decoder_inputs: The very first input token to be decoder (only to be used in evaluation)
-    '''
     encoder_ids = [torch.tensor(item[0]) for item in batch]
     decoder_targets = [torch.tensor(item[1]) for item in batch]
 
@@ -82,7 +56,7 @@ def normal_collate_fn(batch):
     encoder_mask = (encoder_ids != PAD_IDX).long()
 
     B, T = decoder_targets.shape
-    decoder_start_token_id = 0  # pad token id for T5 config
+    decoder_start_token_id = 0  
     decoder_inputs = torch.zeros((B, T), dtype=torch.long)
     decoder_inputs[:, 0] = decoder_start_token_id
     decoder_inputs[:, 1:] = decoder_targets[:, :-1]
@@ -92,18 +66,6 @@ def normal_collate_fn(batch):
     return encoder_ids, encoder_mask, decoder_inputs, labels, initial_decoder_inputs
 
 def test_collate_fn(batch):
-    '''
-    Collation function to perform dynamic padding for inference on the test set.
-
-    Inputs:
-        * batch (List[Any]): batch is a list of length batch_size, where each index contains what
-                             the dataset __getitem__ function returns.
-
-    Recommended returns: 
-        * encoder_ids: The input ids of shape BxT to be fed into the T5 encoder.
-        * encoder_mask: Mask of shape BxT associated with padding tokens in the encoder input
-        * initial_decoder_inputs: The very first input token to be decoder (only to be used in evaluation)
-    '''
     encoder_ids = [torch.tensor(item) for item in batch]
     encoder_ids = pad_sequence(encoder_ids, batch_first=True, padding_value=PAD_IDX)
     encoder_mask = (encoder_ids != PAD_IDX).long()

@@ -16,15 +16,10 @@ DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 PAD_IDX = 0
 
 def get_args():
-    '''
-    Arguments for training. You may choose to change or extend these as you see fit.
-    '''
     parser = argparse.ArgumentParser(description='T5 training loop')
 
-    # Model hyperparameters
     parser.add_argument('--finetune', action='store_true', help="Whether to finetune T5 or not")
     
-    # Training hyperparameters
     parser.add_argument('--optimizer_type', type=str, default="AdamW", choices=["AdamW"],
                         help="What optimizer to use")
     parser.add_argument('--learning_rate', type=float, default=1e-1)
@@ -44,7 +39,6 @@ def get_args():
     parser.add_argument('--experiment_name', type=str, default='experiment',
                         help="How should we name this experiment?")
 
-    # Data hyperparameters
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--test_batch_size', type=int, default=16)
 
@@ -129,15 +123,6 @@ def train_epoch(args, model, train_loader, optimizer, scheduler):
     return total_loss / total_tokens
         
 def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_path, model_record_path):
-    '''
-    You must implement the evaluation loop to be using during training. We recommend keeping track
-    of the model loss on the SQL queries, the metrics compute_metrics returns (save_queries_and_records should be helpful)
-    and the model's syntax error rate. 
-
-    To compute non-loss metrics, you will need to perform generation with the model. Greedy decoding or beam search
-    should both provide good results. If you find that this component of evaluation takes too long with your compute,
-    we found the cross-entropy loss (in the evaluation set) to be well (albeit imperfectly) correlated with F1 performance.
-    '''
     model.eval()
     tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
     generated_sqls = []
@@ -193,10 +178,6 @@ def eval_epoch(args, model, dev_loader, gt_sql_pth, model_sql_path, gt_record_pa
     return val_loss, record_f1, record_em, sql_em, error_rate
 
 def test_inference(args, model, test_loader, model_sql_path, model_record_path):
-    '''
-    You must implement inference to compute your model's generated SQL queries and its associated 
-    database records. Implementation should be very similar to eval_epoch.
-    '''
     model.eval()
     tokenizer = T5TokenizerFast.from_pretrained('google-t5/t5-small')
     generated_sqls = []
@@ -223,25 +204,19 @@ def test_inference(args, model, test_loader, model_sql_path, model_record_path):
     save_queries_and_records(generated_sqls, model_sql_path, model_record_path)
 
 def main():
-    # Get key arguments
     args = get_args()
     if args.use_wandb:
-        # Recommended: Using wandb (or tensorboard) for result logging can make experimentation easier
         setup_wandb(args)
 
-    # Load the data and the model
     train_loader, dev_loader, test_loader = load_t5_data(args.batch_size, args.test_batch_size)
     model = initialize_model(args)
     optimizer, scheduler = initialize_optimizer_and_scheduler(args, model, len(train_loader))
 
-    # Train 
     train(args, model, train_loader, dev_loader, optimizer, scheduler)
 
-    # Evaluate
     model = load_model_from_checkpoint(args, best=True)
     model.eval()
     
-    # Dev set
     experiment_name = args.experiment_name
     model_type = 'ft' if args.finetune else 'scr'
     gt_sql_path = os.path.join(f'data/dev.sql')
@@ -254,7 +229,6 @@ def main():
     print("Dev set results: Loss: {dev_loss}, Record F1: {dev_record_f1}, Record EM: {dev_record_em}, SQL EM: {dev_sql_em}")
     print(f"Dev set results: {dev_error_rate*100:.2f}% of the generated outputs led to SQL errors")
 
-    # Test set
     model_sql_path = os.path.join(f'results/t5_{model_type}_{experiment_name}_test.sql')
     model_record_path = os.path.join(f'records/t5_{model_type}_{experiment_name}_test.pkl')
     test_inference(args, model, test_loader, model_sql_path, model_record_path)
